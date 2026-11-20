@@ -20,7 +20,7 @@ func CopyAndModifyFiles(
 		return errors.Wrap(err, "os.MkdirAll: failed to create destination directory")
 	}
 
-	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return errors.Wrap(err, "filepath.Walk")
 		}
@@ -40,6 +40,8 @@ func CopyAndModifyFiles(
 
 		return errors.Wrap(err, "copyFile")
 	})
+
+	return errors.Wrap(err, "filepath.Walk")
 }
 
 func copyFile(
@@ -133,43 +135,13 @@ func addSqlizerPrintLines(writer *bufio.Writer, sqlizerVarName string) error {
 		return errors.Wrap(err, "writer.WriteString")
 	}
 
-	_, err = writer.WriteString(`if showsqlErr != nil {` + "\n")
-	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
-	}
-
-	_, err = writer.WriteString(`fmt.Println("err: ", showsqlErr)` + "\n")
-	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
-	}
-
-	_, err = writer.WriteString(`} else {` + "\n")
-	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
-	}
-
-	_, err = writer.WriteString(`fmt.Println("sql: ", showsqlSql)` + "\n")
-	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
-	}
-
-	_, err = writer.WriteString(`fmt.Println("args: ", showsqlArgs)` + "\n")
-	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
-	}
-
-	_, err = writer.WriteString(`}` + "\n")
+	_, err = writer.WriteString(`ShowsqlPrint(showsqlSql, showsqlArgs, showsqlErr)` + "\n")
 
 	return errors.Wrap(err, "writer.WriteString")
 }
 
 func addSqlPrintLines(writer *bufio.Writer, sqlVarName, sqlArgsVarName string) error {
-	_, err := writer.WriteString(fmt.Sprintf(`fmt.Println("sql: ", %s)`+"\n", sqlVarName))
-	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
-	}
-
-	_, err = writer.WriteString(fmt.Sprintf(`fmt.Println("args: ", %s)`+"\n", sqlArgsVarName))
+	_, err := writer.WriteString(fmt.Sprintf(`ShowsqlPrint(%s, %s, nil)`+"\n", sqlVarName, sqlArgsVarName))
 
 	return errors.Wrap(err, "writer.WriteString")
 }

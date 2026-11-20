@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"strings"
 )
@@ -174,7 +176,9 @@ func GetCallData(
 			}
 		case *ast.CallExpr:
 			if fun, ok := expr.Fun.(*ast.SelectorExpr); ok {
-				if pkg, ok := fun.X.(*ast.Ident); ok && pkg.Name != squirrelImport {
+				baseIdent := getBaseIdentifier(fun.X)
+
+				if baseIdent != "" && baseIdent != squirrelImport {
 					position := fset.Position(expr.Pos())
 					isSqlizer := false
 					sqlizerVarName := ""
@@ -183,27 +187,27 @@ func GetCallData(
 
 					switch fun.Sel.Name {
 					case "Exec", "Query", "QueryRow":
-						if name, ok := getArgumentName(expr, 1); ok {
+						if name, ok := getArgumentName(expr, 1, fset); ok {
 							sqlVarName = name
 						}
-						if name, ok := getArgumentName(expr, 2); ok {
+						if name, ok := getArgumentName(expr, 2, fset); ok {
 							sqlArgsVarName = strings.TrimRight(name, ".")
 						}
 					case "Get", "Select":
-						if name, ok := getArgumentName(expr, 2); ok {
+						if name, ok := getArgumentName(expr, 2, fset); ok {
 							sqlVarName = name
 						}
-						if name, ok := getArgumentName(expr, 3); ok {
+						if name, ok := getArgumentName(expr, 3, fset); ok {
 							sqlArgsVarName = strings.TrimRight(name, ".")
 						}
 					case "Execx", "Queryx", "QueryxRow":
 						isSqlizer = true
-						if name, ok := getArgumentName(expr, 1); ok {
+						if name, ok := getArgumentName(expr, 1, fset); ok {
 							sqlizerVarName = name
 						}
 					case "Getx", "Selectx":
 						isSqlizer = true
-						if name, ok := getArgumentName(expr, 2); ok {
+						if name, ok := getArgumentName(expr, 2, fset); ok {
 							sqlizerVarName = name
 						}
 					}
@@ -230,14 +234,29 @@ func GetCallData(
 	return result
 }
 
-func getArgumentName(callExpr *ast.CallExpr, idx int) (string, bool) {
+func getArgumentName(callExpr *ast.CallExpr, idx int, fset *token.FileSet) (string, bool) {
 	if idx >= len(callExpr.Args) {
 		return "", false
 	}
 
-	if firstArg, ok := callExpr.Args[idx].(*ast.Ident); ok {
-		return firstArg.Name, true
+	var buf bytes.Buffer
+	err := printer.Fprint(&buf, fset, callExpr.Args[idx])
+	if err != nil {
+		return "", false
 	}
 
-	return "", false
+	return buf.String(), true
+}
+
+func getBaseIdentifier(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		return getBaseIdentifier(e.X)
+	case *ast.CallExpr:
+		return getBaseIdentifier(e.Fun)
+	default:
+		return ""
+	}
 }

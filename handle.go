@@ -33,6 +33,8 @@ func Handle(
 	signatureDataMap := ExtractSignature(file)
 
 	destDir := "cmd/showsql_tmp"
+	deleteTmpFolder(destDir)
+
 	srcDir := cutFileName(fileName)
 	if err := CopyAndModifyFiles(srcDir, destDir, fileName, callDataMap, signatureDataMap); err != nil {
 		return errors.Wrap(err, "CopyAndModifyFiles")
@@ -43,7 +45,10 @@ func Handle(
 	}
 
 	structName := getStructName(signatureDataMap)
-	signatureData := signatureDataMap[structName+"_"+callMethodName]
+	signatureData, hasSignatureData := signatureDataMap[structName+"_"+callMethodName]
+	if !hasSignatureData {
+		return fmt.Errorf("there is no %s method", callMethodName)
+	}
 
 	generateData := GenerateData{
 		StructName:     structName,
@@ -54,6 +59,10 @@ func Handle(
 
 	if err := GeneratePopulatingFile(destDir + "/showsql_populate.go"); err != nil {
 		return errors.Wrap(err, "GeneratePopulatingFile")
+	}
+
+	if err := GeneratePrintingFile(destDir + "/showsql_print.go"); err != nil {
+		return errors.Wrap(err, "GeneratePrintingFile")
 	}
 
 	mainFilePath := destDir + "/main.go"
@@ -103,11 +112,20 @@ func cutFileName(fileName string) string {
 }
 
 func getStructName(signatureDataMap map[string]SignatureData) string {
-	parentFunc := ""
-	for k := range signatureDataMap {
-		parentFunc = k
+	keysMap := make(map[string]int, len(signatureDataMap))
 
-		break
+	for _, data := range signatureDataMap {
+		keysMap[data.StructName]++
+	}
+
+	maxCount := 0
+	parentFunc := ""
+
+	for structName, count := range keysMap {
+		if count > maxCount {
+			maxCount = count
+			parentFunc = structName
+		}
 	}
 
 	sl := strings.Split(parentFunc, "_")

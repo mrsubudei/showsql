@@ -48,7 +48,7 @@ type GenerateData struct {
 func GenerateMainFile(data GenerateData, destDir string) error {
 	tmpl, err := template.New("generated").Parse(templateMainFile)
 	if err != nil {
-		return errors.Wrap(err, "template.New")
+		return errors.Wrap(err, "template.New.Parse")
 	}
 
 	outFile, err := os.Create(destDir)
@@ -61,6 +61,51 @@ func GenerateMainFile(data GenerateData, destDir string) error {
 
 	return errors.Wrap(err, "tmpl.Execute")
 }
+
+func GeneratePrintingFile(destDir string) error {
+	f, err := os.OpenFile(destDir, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return errors.Wrap(err, "os.OpenFile")
+	}
+	defer f.Close()
+
+	writer := bufio.NewWriter(f)
+
+	_, err = writer.WriteString(templatePrintingFile)
+	if err != nil {
+		return errors.Wrap(err, "writer.WriteString")
+	}
+	err = writer.Flush()
+
+	return errors.Wrap(err, "writer.Flush")
+}
+
+const templatePrintingFile = `
+package main
+
+import (
+	"fmt"
+)
+
+func ShowsqlPrint(sql string, args []interface{}, err error) {
+	fmt.Println()
+
+    if err != nil {
+		fmt.Println("err: ", err)
+		fmt.Println()
+
+		return
+    }
+
+	fmt.Println("sql: ", sql)
+
+	fmt.Println()
+
+	fmt.Println("args: ", args)
+
+	fmt.Println()
+}
+`
 
 func GeneratePopulatingFile(destDir string) error {
 	f, err := os.OpenFile(destDir, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
