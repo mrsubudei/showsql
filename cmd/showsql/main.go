@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	service "github.com/mrsubudei/showsql"
+	"github.com/mrsubudei/showsql"
 	"github.com/spf13/pflag"
 )
 
@@ -19,7 +19,16 @@ func main() {
 
 	pflag.Parse()
 
-	if err := service.Handle(currentFilePath, methodName, keepGenerated); err != nil {
-		log.Fatal(err)
+	if currentFilePath != "" && methodName != "" {
+		if err := showsql.Handle(currentFilePath, methodName, keepGenerated); err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
+	errNav := showsql.Navigate()
+	if errNav != nil {
+		log.Fatal(errNav)
 	}
 }
