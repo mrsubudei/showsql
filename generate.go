@@ -107,22 +107,21 @@ func ShowsqlPrint(sql string, args []interface{}, err error) {
 }
 `
 
-func GeneratePopulatingFile(destDir string) error {
-	f, err := os.OpenFile(destDir, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+func GeneratePopulatingFile(flags Flags, destDir string) error {
+	tmpl, err := template.New("generated").Parse(templatePopulatingFile)
 	if err != nil {
-		return errors.Wrap(err, "os.OpenFile")
+		return errors.Wrap(err, "template.New.Parse")
 	}
-	defer f.Close()
 
-	writer := bufio.NewWriter(f)
-
-	_, err = writer.WriteString(templatePopulatingFile)
+	outFile, err := os.Create(destDir)
 	if err != nil {
-		return errors.Wrap(err, "writer.WriteString")
+		return errors.Wrap(err, "os.Create")
 	}
-	err = writer.Flush()
+	defer outFile.Close()
 
-	return errors.Wrap(err, "writer.Flush")
+	err = tmpl.Execute(outFile, flags)
+
+	return errors.Wrap(err, "tmpl.Execute")
 }
 
 const templatePopulatingFile = `
@@ -136,13 +135,13 @@ import (
 )
 
 const (
-	allIntsZero     = false
-	allStringsEmpty = false
-	allBoolsFalse   = false
-	allTimeEmpty    = false
+	allIntsZero     = {{.AllIntsZero}}
+	allStringsEmpty = {{.AllStrsEmpty}}
+	allBoolsFalse   = {{.AllboolsFalse}}
+	allTimeEmpty    = {{.AllTimeEmpty}}
 )
 
-const elemsCount = 1
+const elemsCount = {{.ElemsCount}}
 
 func isPrime(n int) bool {
 	if n <= 1 {

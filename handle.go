@@ -12,9 +12,18 @@ import (
 	"golang.org/x/tools/imports"
 )
 
+type Flags struct {
+	KeepGenerated bool
+	AllIntsZero   bool
+	AllStrsEmpty  bool
+	AllboolsFalse bool
+	AllTimeEmpty  bool
+	ElemsCount    int
+}
+
 func Handle(
 	fileName, callMethodName string,
-	keepGeneratedFiles bool,
+	flags Flags,
 ) error {
 	if !strings.HasSuffix(fileName, ".go") {
 		return errors.New("this is not .go file")
@@ -40,7 +49,7 @@ func Handle(
 		return errors.Wrap(err, "CopyAndModifyFiles")
 	}
 
-	if !keepGeneratedFiles {
+	if !flags.KeepGenerated {
 		defer deleteTmpFolder(destDir)
 	}
 
@@ -57,7 +66,7 @@ func Handle(
 		Imports:        allImports,
 	}
 
-	if err := GeneratePopulatingFile(destDir + "/showsql_populate.go"); err != nil {
+	if err := GeneratePopulatingFile(flags, destDir+"/showsql_populate.go"); err != nil {
 		return errors.Wrap(err, "GeneratePopulatingFile")
 	}
 
@@ -131,4 +140,10 @@ func getStructName(signatureDataMap map[string]SignatureData) string {
 	sl := strings.Split(parentFunc, "_")
 
 	return sl[0]
+}
+
+func CheckGoModExists() bool {
+	_, err := os.Stat("go.mod")
+
+	return err == nil || !os.IsNotExist(err)
 }

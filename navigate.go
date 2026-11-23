@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -15,7 +16,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func Navigate() error {
+func Navigate(flags Flags) error {
 	currentPath := "./"
 
 	for {
@@ -56,12 +57,14 @@ func Navigate() error {
 
 			switch key {
 			case keyboard.KeyArrowUp:
-				if selected > 0 {
-					selected--
+				selected--
+				if selected == -1 {
+					selected = len(dirs) - 1
 				}
 			case keyboard.KeyArrowDown:
-				if selected < len(dirs)-1 {
-					selected++
+				selected++
+				if selected >= len(dirs) {
+					selected = 0
 				}
 			case keyboard.KeyEnter:
 				currentPath = filepath.Join(currentPath, dirs[selected])
@@ -80,15 +83,25 @@ func Navigate() error {
 					return errors.Wrap(err, "getAllMethods")
 				}
 
-				err = chooseMethod(methods, currentPath)
+				isChosen, err := chooseMethod(methods, currentPath, flags)
+				if err != nil {
+					return errors.Wrap(err, "chooseMethod")
+				}
 
-				return errors.Wrap(err, "chooseMethod")
+				if !isChosen {
+					sl := strings.Split(currentPath, "/")
+					currentPath = strings.Join(sl[:len(sl)-1], "/")
+
+					break
+				}
+
+				return nil
 			}
 		}
 	}
 }
 
-func chooseMethod(methods []string, fileName string) error {
+func chooseMethod(methods []string, fileName string, flags Flags) (bool, error) {
 	selected := 0
 
 	for {
@@ -104,29 +117,35 @@ func chooseMethod(methods []string, fileName string) error {
 
 		_, key, err := keyboard.GetKey()
 		if err != nil {
-			return errors.Wrap(err, "keyboard.GetKey")
+			return false, errors.Wrap(err, "keyboard.GetKey")
 		}
 
 		switch key {
 		case keyboard.KeyArrowUp:
-			if selected > 0 {
-				selected--
+			selected--
+			if selected == -1 {
+				selected = len(methods) - 1
 			}
 		case keyboard.KeyArrowDown:
-			if selected < len(methods)-1 {
-				selected++
+			selected++
+			if selected >= len(methods) {
+				selected = 0
 			}
 		case keyboard.KeyEnter:
+			if selected == 0 {
+				return false, nil
+			}
+
 			clearScreen()
 
 			method := methods[selected]
 			fmt.Printf("-p=%s -m=%s\n\n", fileName, method)
 
-			err = Handle(fileName, method, true)
+			err = Handle(fileName, method, flags)
 
-			return errors.Wrap(err, "Handle")
+			return true, errors.Wrap(err, "Handle")
 		case keyboard.KeyEsc:
-			return nil
+			return true, nil
 		}
 	}
 }
@@ -164,7 +183,7 @@ func getAllMethods(fileName string) ([]string, error) {
 
 	signatureDataMap := ExtractSignature(file)
 
-	result := []string{}
+	result := []string{".."}
 
 	for key := range signatureDataMap {
 		sl := strings.Split(key, "_")
@@ -173,6 +192,8 @@ func getAllMethods(fileName string) ([]string, error) {
 			result = append(result, sl[1])
 		}
 	}
+
+	sort.Strings(result)
 
 	return result, nil
 }
