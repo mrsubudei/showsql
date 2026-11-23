@@ -25,7 +25,7 @@ func main(){
 			arg{{$i}} := context.Background()
 		{{- else }}
     		var tmp{{$i}} {{$argType}}
-			populated{{$i}} := Populate(tmp{{$i}})
+			populated{{$i}} := ShowsqlPopulate(tmp{{$i}})
 			arg{{$i}}, _ := populated{{$i}}.({{$argType}})
 		{{- end }}
 	{{- end }}
@@ -85,25 +85,116 @@ package main
 
 import (
 	"fmt"
+	"strings"
+	"regexp"
 )
 
 func ShowsqlPrint(sql string, args []interface{}, err error) {
-	fmt.Println()
-
-    if err != nil {
+    fmt.Println()
+	if err != nil {
 		fmt.Println("err: ", err)
 		fmt.Println()
 
 		return
     }
 
-	fmt.Println("sql: ", sql)
+	removed := showsqlRemoveExtraSpaces(sql)
+	prettied := showsqlMakePretty(removed)
 
+	fmt.Println("sql: ", prettied)
 	fmt.Println()
 
 	fmt.Println("args: ", args)
-
 	fmt.Println()
+}
+
+func showsqlRemoveExtraSpaces(str string) string {
+	str = strings.ReplaceAll(str, "\t", " ")
+	str = strings.ReplaceAll(str, "\n", " ")
+
+	spaceRegex := regexp.MustCompile("\\s+")
+	str = spaceRegex.ReplaceAllString(str, " ")
+
+	return strings.TrimSpace(str)
+}
+
+func showsqlMakePretty(str string) string {
+	keyWordsMap := map[string]struct{}{
+		"SELECT":    {},
+		"INSERT":    {},
+		"DELETE":    {},
+		"FROM":      {},
+		"WHERE":     {},
+		"GROUP":     {},
+		"HAVING":    {},
+		"ORDER":     {},
+		"LIMIT":     {},
+		"OFFSET":    {},
+		"RETURNING": {},
+		"BEGIN":     {},
+		"COMMIT":    {},
+		"ROLLBACK":  {},
+		"FOR":       {},
+		"OVER":      {},
+		"WITH":      {},
+		"SET":       {},
+		"USING":     {},
+		"JOIN":      {},
+		"LEFT":      {},
+		"RIGHT":     {},
+		"INNER":     {},
+		"FULL":      {},
+		"CROSS":     {},
+		"NATURAL":   {},
+		"CASE":      {},
+		"WHEN":      {},
+		"THEN":      {},
+		"ELSE":      {},
+		"END":       {},
+		"UNION":     {},
+		"INTERSECT": {},
+		"EXCEPT":    {},
+		"DO":        {},
+		"SHOW":      {},
+		"CREATE":    {},
+		"ALTER":     {},
+		"DROP":      {},
+		"TRUNCATE":  {},
+	}
+
+	var sb strings.Builder
+	sl := strings.Split(str, " ")
+
+	nestingLevel := 0
+	for _, val := range sl {
+		if _, ok := keyWordsMap[strings.ToUpper(val)]; ok {
+			sb.WriteString("\n")
+			sb.WriteString(addTabs(nestingLevel))
+		}
+		if val == ")" || val == ")," {
+			sb.WriteString("\n")
+			nestingLevel--
+		}
+
+		sb.WriteString(val + " ")
+
+		if val == "(" {
+			nestingLevel++
+		}
+
+	}
+
+	return sb.String()
+}
+
+func addTabs(nestingLevel int) string {
+	result := ""
+
+	for range nestingLevel {
+		result += "\t"
+	}
+
+	return result
 }
 `
 
@@ -218,7 +309,7 @@ var nesting int
 
 const maxNesting = 10000
 
-func Populate(input any) any {
+func ShowsqlPopulate(input any) any {
 	if input == nil {
 		return nil
 	}
