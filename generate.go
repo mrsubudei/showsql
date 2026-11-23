@@ -135,6 +135,15 @@ import (
 	"time"
 )
 
+const (
+	allIntsZero     = false
+	allStringsEmpty = false
+	allBoolsFalse   = false
+	allTimeEmpty    = false
+)
+
+const elemsCount = 1
+
 func isPrime(n int) bool {
 	if n <= 1 {
 		return false
@@ -153,6 +162,10 @@ func GetNextInt() func() int {
 	val := 5
 
 	return func() int {
+		if allIntsZero {
+			return 0
+		}
+
 		val++
 
 		for i := val; i < math.MaxInt32; i++ {
@@ -172,6 +185,10 @@ func GetNextString() func() string {
 	suffix := 0
 
 	return func() string {
+		if allStringsEmpty {
+			return ""
+		}
+
 		suffix++
 
 		return val + strconv.Itoa(suffix)
@@ -182,6 +199,10 @@ func GetNextTime() func() time.Time {
 	val := time.Date(2025, 1, 0, 15, 0, 0, 0, time.UTC)
 
 	return func() time.Time {
+		if allTimeEmpty {
+			return time.Time{}
+		}
+
 		val = val.Add(time.Hour * 24)
 
 		return val
@@ -205,45 +226,39 @@ func Populate(input any) any {
 
 	t := reflect.TypeOf(input)
 
-	elem := reflect.New(t).Elem()
-
 	isPointer := false
 	if t.Kind() == reflect.Pointer {
 		isPointer = true
 		t = t.Elem()
 	}
 
+	elem := reflect.New(t).Elem()
+
 	switch t.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+	case
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 		reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
 
 		populated := populatePrimitive(t)
-		if isPointer {
-			ptr := reflect.New(t)
-			ptr.Elem().Set(populated)
 
-			return ptr.Convert(t).Interface()
-		}
-
-		return populated.Convert(t).Interface()
+		return getValuePointerType(t, populated, isPointer)
 	case reflect.Struct:
-		populated := populateStruct(t)
+		populated := populateCommonStruct(t)
 
-		if isPointer {
-			ptr := reflect.New(t)
-			ptr.Elem().Set(populated)
-
-			return ptr.Convert(t).Interface()
-		}
-
-		return populated.Convert(t).Interface()
+		return getValuePointerType(t, populated, isPointer)
 	case reflect.Slice:
-		return populateSlice(elem).Interface()
+		populated := populateSlice(elem)
+
+		return getValuePointerType(t, populated, isPointer)
 	case reflect.Array:
-		return populateArray(elem).Interface()
+		populated := populateArray(elem)
+
+		return getValuePointerType(t, populated, isPointer)
 	case reflect.Map:
-		return populateMap(elem).Interface()
+		populated := populateMap(elem)
+
+		return getValuePointerType(t, populated, isPointer)
 	}
 
 	return nil
@@ -256,7 +271,7 @@ func populateSlice(input reflect.Value) reflect.Value {
 	nesting++
 
 	elemType := input.Type().Elem()
-	slice := reflect.MakeSlice(input.Type(), 1, 1)
+	slice := reflect.MakeSlice(input.Type(), elemsCount, elemsCount)
 	isPointer := false
 
 	if elemType.Kind() == reflect.Ptr {
@@ -264,34 +279,37 @@ func populateSlice(input reflect.Value) reflect.Value {
 		elemType = elemType.Elem()
 	}
 
-	elem := reflect.New(elemType).Elem()
-	var populated reflect.Value
+	for i := 0; i < elemsCount; i++ {
+		elem := reflect.New(elemType).Elem()
+		var populated reflect.Value
 
-	switch elem.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
+		switch elem.Kind() {
+		case
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
 
-		populated = populatePrimitive(elem.Type())
-	case reflect.Struct:
-		populated = populateStruct(elem.Type())
-	case reflect.Slice:
-		populated = populateSlice(elem)
-	case reflect.Array:
-		populated = populateArray(elem)
-	case reflect.Map:
-		populated = populateMap(elem)
+			populated = populatePrimitive(elem.Type())
+		case reflect.Struct:
+			populated = populateCommonStruct(elem.Type())
+		case reflect.Slice:
+			populated = populateSlice(elem)
+		case reflect.Array:
+			populated = populateArray(elem)
+		case reflect.Map:
+			populated = populateMap(elem)
+		}
+
+		elem.Set(populated.Convert(elem.Type()))
+
+		if isPointer {
+			ptr := reflect.New(elemType)
+			ptr.Elem().Set(elem)
+			elem = ptr
+		}
+
+		slice.Index(i).Set(elem)
 	}
-
-	elem.Set(populated.Convert(elem.Type()))
-
-	if isPointer {
-		ptr := reflect.New(elemType)
-		ptr.Elem().Set(elem)
-		elem = ptr
-	}
-
-	slice.Index(0).Set(elem)
 
 	return slice
 }
@@ -316,13 +334,14 @@ func populateArray(input reflect.Value) reflect.Value {
 		elem := reflect.New(elemType).Elem()
 
 		switch elem.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		case
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 			reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
 
 			elem.Set(populatePrimitive(elemType).Convert(elemType))
 		case reflect.Struct:
-			elem.Set(populateStruct(elemType))
+			elem.Set(populateCommonStruct(elemType))
 		case reflect.Slice:
 			elem.Set(populateSlice(elem).Convert(elemType))
 		case reflect.Array:
@@ -352,50 +371,64 @@ func populateMap(input reflect.Value) reflect.Value {
 	keyType := input.Type().Key()
 	valType := input.Type().Elem()
 	mapInstance := reflect.MakeMap(input.Type())
+
+	isKeyPointer := false
 	isValPointer := false
+
+	if keyType.Kind() == reflect.Ptr {
+		isKeyPointer = true
+		keyType = keyType.Elem()
+	}
 
 	if valType.Kind() == reflect.Ptr {
 		isValPointer = true
 		valType = valType.Elem()
 	}
 
-	key := reflect.New(keyType).Elem()
-	val := reflect.New(valType).Elem()
+	for i := 0; i < elemsCount; i++ {
+		key := reflect.New(keyType).Elem()
+		var populatedKey reflect.Value
 
-	switch key.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
+		switch key.Kind() {
+		case
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
 
-		key.Set(populatePrimitive(keyType).Convert(keyType))
-	case reflect.Struct:
-		key.Set(populateStruct(keyType).Convert(keyType))
-	case reflect.Array:
-		key.Set(populateArray(key).Convert(keyType))
-	}
+			populatedKey = populatePrimitive(key.Type())
+		case reflect.Struct:
+			populatedKey = populateCommonStruct(key.Type())
+		case reflect.Array:
+			populatedKey = populateArray(key)
+		}
 
-	switch val.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
+		tmpKey := populatedKey
+		populatedKey = getValuePointer(key.Type(), tmpKey, isKeyPointer)
 
-		val.Set(populatePrimitive(valType).Convert(valType))
-	case reflect.Struct:
-		val.Set(populateStruct(valType).Convert(valType))
-	case reflect.Slice:
-		val.Set(populateSlice(val).Convert(valType))
-	case reflect.Array:
-		val.Set(populateArray(val).Convert(valType))
-	case reflect.Map:
-		val.Set(populateMap(val).Convert(valType))
-	}
+		val := reflect.New(valType).Elem()
+		var populatedVal reflect.Value
 
-	if isValPointer {
-		ptr := reflect.New(valType)
-		ptr.Elem().Set(val)
-		mapInstance.SetMapIndex(key, ptr)
-	} else {
-		mapInstance.SetMapIndex(key, val)
+		switch val.Kind() {
+		case
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
+
+			populatedVal = populatePrimitive(val.Type())
+		case reflect.Struct:
+			populatedVal = populateCommonStruct(val.Type())
+		case reflect.Slice:
+			populatedVal = populateSlice(val)
+		case reflect.Array:
+			populatedVal = populateArray(val)
+		case reflect.Map:
+			populatedVal = populateMap(val)
+		}
+
+		tmpVal := populatedVal
+		populatedVal = getValuePointer(val.Type(), tmpVal, isValPointer)
+
+		mapInstance.SetMapIndex(populatedKey, populatedVal)
 	}
 
 	return mapInstance
@@ -415,24 +448,36 @@ func populateStruct(t reflect.Type) reflect.Value {
 			continue
 		}
 
-		switch fieldValue.Kind() {
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		fieldType := fieldValue.Type()
+		isPointer := false
+		if fieldType.Kind() == reflect.Pointer {
+			isPointer = true
+			fieldType = fieldType.Elem()
+		}
+
+		field := reflect.New(fieldType).Elem()
+		var populated reflect.Value
+
+		switch field.Kind() {
+		case
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 			reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
 
-			fieldValue.Set(populatePrimitive(fieldValue.Type()))
+			populated = populatePrimitive(field.Type())
 		case reflect.Struct:
-			if fieldValue.Type() == reflect.TypeOf(time.Time{}) {
-				fieldValue.Set(reflect.ValueOf(NextTime()))
-			}
-			fieldValue.Set(populateStruct(fieldValue.Type()))
+			populated = populateCommonStruct(field.Type())
 		case reflect.Slice:
-			fieldValue.Set(populateSlice(fieldValue))
+			populated = populateSlice(field)
 		case reflect.Array:
-			fieldValue.Set(populateArray(fieldValue))
+			populated = populateArray(field)
 		case reflect.Map:
-			fieldValue.Set(populateMap(fieldValue))
+			populated = populateMap(field)
 		}
+
+		tmp := populated
+		populated = getValuePointer(field.Type(), tmp, isPointer)
+		fieldValue.Set(populated)
 	}
 
 	return newInstance
@@ -468,13 +513,51 @@ func populatePrimitive(t reflect.Type) reflect.Value {
 	case reflect.String:
 		value = NextStr()
 	case reflect.Bool:
-		value = true
+		if allBoolsFalse {
+			value = false
+		} else {
+			value = true
+		}
 	case reflect.Chan:
 		value = reflect.MakeChan(t, 0).Interface()
 	case reflect.Func:
 		fn := reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 			for i := 0; i < t.NumOut(); i++ {
-				results = append(results, reflect.Zero(t.Out(i)))
+				outType := t.Out(i)
+
+				isPointer := false
+				if outType.Kind() == reflect.Pointer {
+					isPointer = true
+					outType = outType.Elem()
+				}
+
+				outValue := reflect.New(outType).Elem()
+				var populated reflect.Value
+
+				switch outValue.Kind() {
+				case
+					reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+					reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+					reflect.Float32, reflect.Float64, reflect.String, reflect.Bool, reflect.Chan, reflect.Func:
+
+					populated = populatePrimitive(outValue.Type())
+				case reflect.Struct:
+					populated = populateCommonStruct(outValue.Type())
+				case reflect.Slice:
+					populated = populateSlice(outValue)
+				case reflect.Array:
+					populated = populateArray(outValue)
+				case reflect.Map:
+					populated = populateMap(outValue)
+				default:
+					results = append(results, reflect.Zero(t.Out(i)))
+
+					continue
+				}
+
+				tmp := populated
+				populated = getValuePointer(outType, tmp, isPointer)
+				results = append(results, populated)
 			}
 
 			return
@@ -484,5 +567,35 @@ func populatePrimitive(t reflect.Type) reflect.Value {
 	}
 
 	return reflect.ValueOf(value)
+}
+
+func populateCommonStruct(t reflect.Type) reflect.Value {
+	if t == reflect.TypeOf(time.Time{}) {
+		return reflect.ValueOf(NextTime())
+	}
+
+	return populateStruct(t)
+}
+
+func getValuePointerType(t reflect.Type, populated reflect.Value, isPointer bool) any {
+	if isPointer {
+		ptr := reflect.New(t)
+		ptr.Elem().Set(populated)
+
+		return ptr.Interface()
+	}
+
+	return populated.Convert(t).Interface()
+}
+
+func getValuePointer(t reflect.Type, populated reflect.Value, isPointer bool) reflect.Value {
+	if isPointer {
+		ptr := reflect.New(t)
+		ptr.Elem().Set(populated)
+
+		return ptr
+	}
+
+	return populated.Convert(t)
 }
 `
