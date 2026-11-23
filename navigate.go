@@ -184,11 +184,17 @@ func getAllMethods(fileName string) ([]string, error) {
 	signatureDataMap := ExtractSignature(file)
 
 	result := []string{".."}
+	methodsMap := make(map[string]struct{}, len(signatureDataMap))
 
 	for key := range signatureDataMap {
 		sl := strings.Split(key, "_")
 
 		if len(sl) > 1 && len(sl[1]) > 0 && unicode.IsUpper(rune(sl[1][0])) {
+			if _, ok := methodsMap[sl[1]]; ok {
+				continue
+			}
+
+			methodsMap[sl[1]] = struct{}{}
 			result = append(result, sl[1])
 		}
 	}

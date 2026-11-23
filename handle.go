@@ -39,6 +39,10 @@ func Handle(
 	squirrelImport := getSquirrelImport(allImports)
 
 	callDataMap := GetCallData(file, fset, squirrelImport)
+	if len(callDataMap) == 0 {
+		return errors.New("there is no database calls in this file")
+	}
+
 	signatureDataMap := ExtractSignature(file)
 
 	destDir := "cmd/showsql_tmp"
@@ -53,14 +57,13 @@ func Handle(
 		defer deleteTmpFolder(destDir)
 	}
 
-	structName := getStructName(signatureDataMap)
-	signatureData, hasSignatureData := signatureDataMap[structName+"_"+callMethodName]
+	signatureData, hasSignatureData := getSignatureData(signatureDataMap, callMethodName)
 	if !hasSignatureData {
 		return fmt.Errorf("there is no %s method", callMethodName)
 	}
 
 	generateData := GenerateData{
-		StructName:     structName,
+		StructName:     signatureData.StructName,
 		CallMethodName: callMethodName,
 		Arguments:      signatureData.Arguments,
 		Imports:        allImports,
@@ -120,26 +123,14 @@ func cutFileName(fileName string) string {
 	return string(strings.Join(sl[:len(sl)-1], "/"))
 }
 
-func getStructName(signatureDataMap map[string]SignatureData) string {
-	keysMap := make(map[string]int, len(signatureDataMap))
-
+func getSignatureData(signatureDataMap map[string]SignatureData, callMethodName string) (SignatureData, bool) {
 	for _, data := range signatureDataMap {
-		keysMap[data.StructName]++
-	}
-
-	maxCount := 0
-	parentFunc := ""
-
-	for structName, count := range keysMap {
-		if count > maxCount {
-			maxCount = count
-			parentFunc = structName
+		if data.MethodName == callMethodName {
+			return data, true
 		}
 	}
 
-	sl := strings.Split(parentFunc, "_")
-
-	return sl[0]
+	return SignatureData{}, false
 }
 
 func CheckGoModExists() bool {

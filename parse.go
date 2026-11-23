@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"strconv"
 	"strings"
 )
 
@@ -19,42 +20,66 @@ type SignatureData struct {
 func ExtractSignature(
 	file *ast.File,
 ) map[string]SignatureData {
-	result := map[string]SignatureData{}
+	var (
+		result       = map[string]SignatureData{}
+		structName   string
+		nestingLevel int
+		methodName   string
+		args         []*ast.Field
+		returns      []*ast.Field
+	)
 
-	for _, decl := range file.Decls {
-		funcDecl, ok := decl.(*ast.FuncDecl)
-		if !ok || funcDecl.Recv == nil {
-			continue
-		}
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch expr := n.(type) {
+		case *ast.FuncDecl:
+			if expr.Recv == nil {
+				return true
+			}
 
-		data := SignatureData{}
+			nestingLevel = 1
+			if expr.Recv != nil && len(expr.Recv.List) > 0 {
+				if starExpr, ok := expr.Recv.List[0].Type.(*ast.StarExpr); ok {
+					structName = exprToString(starExpr.X)
+				} else {
+					structName = exprToString(expr.Recv.List[0].Type)
+				}
+			}
 
-		var structName string
-		if len(funcDecl.Recv.List) > 0 {
-			if starExpr, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
-				structName = exprToString(starExpr.X)
-			} else {
-				structName = exprToString(funcDecl.Recv.List[0].Type)
+			methodName = expr.Name.Name
+			if expr.Type.Params != nil {
+				args = expr.Type.Params.List
+			}
+			if expr.Type.Results != nil {
+				returns = expr.Type.Results.List
+			}
+		case *ast.FuncLit:
+			nestingLevel++
+			if expr.Type.Params != nil {
+				args = expr.Type.Params.List
+			}
+			if expr.Type.Results != nil {
+				returns = expr.Type.Results.List
 			}
 		}
 
-		data.MethodName = funcDecl.Name.Name
+		data := SignatureData{}
+		data.MethodName = methodName
 		data.StructName = structName
 
-		for _, param := range funcDecl.Type.Params.List {
+		for _, param := range args {
 			for range param.Names {
 				data.Arguments = append(data.Arguments, exprToString(param.Type))
 			}
 		}
 
-		if funcDecl.Type.Results != nil {
-			for _, result := range funcDecl.Type.Results.List {
-				data.Returns = append(data.Returns, exprToString(result.Type))
-			}
+		for _, result := range returns {
+			data.Returns = append(data.Returns, exprToString(result.Type))
 		}
 
-		result[structName+"_"+funcDecl.Name.Name] = data
-	}
+		result[structName+"_"+methodName+"_"+strconv.Itoa(nestingLevel)] = data
+
+		return true
+	})
 
 	return result
 }
@@ -154,12 +179,16 @@ func GetCallData(
 	fset *token.FileSet,
 	squirrelImport string,
 ) map[int]CallData {
-	result := make(map[int]CallData)
-	var currentFunc string
+	var (
+		result       = make(map[int]CallData)
+		currentFunc  string
+		nestingLevel int
+	)
 
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch expr := n.(type) {
 		case *ast.FuncDecl:
+			nestingLevel = 1
 			if expr.Recv != nil && len(expr.Recv.List) > 0 {
 				receiverName := ""
 				switch t := expr.Recv.List[0].Type.(type) {
@@ -170,10 +199,14 @@ func GetCallData(
 						receiverName = ident.Name
 					}
 				}
-				currentFunc = receiverName + "_" + expr.Name.Name
+				currentFunc = receiverName + "_" + expr.Name.Name + "_" + strconv.Itoa(nestingLevel)
 			} else {
-				currentFunc = expr.Name.Name
+				currentFunc = expr.Name.Name + "_" + strconv.Itoa(nestingLevel)
 			}
+		case *ast.FuncLit:
+			nestingLevel++
+			sl := strings.Split(currentFunc, "_")
+			currentFunc = strings.Join(sl[:len(sl)-1], "_") + "_" + strconv.Itoa(nestingLevel)
 		case *ast.CallExpr:
 			if fun, ok := expr.Fun.(*ast.SelectorExpr); ok {
 				baseIdent := getBaseIdentifier(fun.X)
