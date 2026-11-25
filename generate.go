@@ -123,6 +123,7 @@ func showsqlMakePretty(str string) string {
 		"SELECT":    {},
 		"INSERT":    {},
 		"DELETE":    {},
+		"UPDATE":    {},
 		"FROM":      {},
 		"WHERE":     {},
 		"GROUP":     {},
@@ -160,6 +161,8 @@ func showsqlMakePretty(str string) string {
 		"ALTER":     {},
 		"DROP":      {},
 		"TRUNCATE":  {},
+		"ON":        {},
+		"VALUES":    {},
 	}
 
 	var sb strings.Builder
