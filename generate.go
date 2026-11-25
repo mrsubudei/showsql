@@ -89,7 +89,7 @@ import (
 	"regexp"
 )
 
-func ShowsqlPrint(sql string, args []interface{}, err error) {
+func ShowsqlPrint(sql string, args interface{}, err error) {
     fmt.Println()
 	if err != nil {
 		fmt.Println("err: ", err)
@@ -123,7 +123,6 @@ func showsqlMakePretty(str string) string {
 		"SELECT":    {},
 		"INSERT":    {},
 		"DELETE":    {},
-		"UPDATE":    {},
 		"FROM":      {},
 		"WHERE":     {},
 		"GROUP":     {},

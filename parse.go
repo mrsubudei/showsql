@@ -252,6 +252,10 @@ func GetCallData(
 						return true
 					}
 
+					if sqlArgsVarName == "" {
+						sqlArgsVarName = "nil"
+					}
+
 					result[position.Line] = CallData{
 						ParentMethodName: currentFunc,
 						IsSqlizer:        isSqlizer,
