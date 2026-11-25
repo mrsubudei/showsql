@@ -388,6 +388,8 @@ func populateSlice(input reflect.Value) reflect.Value {
 			populated = populateArray(elem)
 		case reflect.Map:
 			populated = populateMap(elem)
+		default:
+			populated = reflect.Zero(elem.Type())
 		}
 
 		elem.Set(populated.Convert(elem.Type()))
@@ -438,6 +440,8 @@ func populateArray(input reflect.Value) reflect.Value {
 			elem.Set(populateArray(elem).Convert(elemType))
 		case reflect.Map:
 			elem.Set(populateMap(elem).Convert(elemType))
+		default:
+			elem.Set(reflect.Zero(elem.Type()))
 		}
 
 		if isPointer {
@@ -490,6 +494,8 @@ func populateMap(input reflect.Value) reflect.Value {
 			populatedKey = populateCommonStruct(key.Type())
 		case reflect.Array:
 			populatedKey = populateArray(key)
+		default:
+			populatedKey = reflect.Zero(key.Type())
 		}
 
 		tmpKey := populatedKey
@@ -563,6 +569,8 @@ func populateStruct(t reflect.Type) reflect.Value {
 			populated = populateArray(field)
 		case reflect.Map:
 			populated = populateMap(field)
+		default:
+			populated = reflect.Zero(field.Type())
 		}
 
 		tmp := populated
