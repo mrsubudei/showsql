@@ -19,12 +19,15 @@ type Flags struct {
 	AllboolsFalse bool
 	AllTimeEmpty  bool
 	ElemsCount    int
+	QueriesFile   string
 }
 
 func Handle(
 	fileName, callMethodName string,
 	flags Flags,
 ) error {
+	ParseMutationQueries(flags.QueriesFile)
+
 	if !strings.HasSuffix(fileName, ".go") {
 		return errors.New("this is not .go file")
 	}
@@ -99,7 +102,12 @@ func Handle(
 
 func executeMain(destDir string) error {
 	cmd := exec.Command("go", "run", "./"+destDir)
+
 	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrap(err, "cmd.CombinedOutput")
+	}
+
 	fmt.Print(string(output))
 
 	return errors.Wrap(err, "cmd.CombinedOutput")

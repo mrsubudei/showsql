@@ -20,6 +20,7 @@ var (
 -b     --boolean        populate all boolean variables with false value
 -t     --time           populate all time variables with zero value
 -n     --number=int     specify the number of elements to populate slices, maps, arrays 
+-f     --file=string    specify config file for mutation query names
 `
 )
 
@@ -51,6 +52,9 @@ func main() {
 	var elemsCount int
 	pflag.IntVarP(&elemsCount, "number", "n", 1, "number of elements to populate slices, maps, arrays ")
 
+	var queriesFile string
+	pflag.StringVarP(&queriesFile, "file", "f", "", "specify config file for mutation query names")
+
 	pflag.Parse()
 
 	if help {
@@ -78,6 +82,7 @@ func main() {
 		AllboolsFalse: allBoolsFalse,
 		AllTimeEmpty:  allTimeEmpty,
 		ElemsCount:    elemsCount,
+		QueriesFile:   queriesFile,
 	}
 
 	if currentFilePath != "" && methodName != "" {

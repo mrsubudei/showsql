@@ -6,8 +6,11 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"os"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type SignatureData struct {
@@ -119,6 +122,8 @@ func exprToString(expr ast.Expr) string {
 		}
 
 		return fmt.Sprintf("func(%s) (%s)", strings.Join(params, ", "), strings.Join(results, ", "))
+	case *ast.Ellipsis:
+		return exprToString(t.Elt)
 	default:
 		return "unknown"
 	}
@@ -163,6 +168,33 @@ func getSquirrelImport(allImports []string) string {
 	}
 
 	return result
+}
+
+var caseFunc = func(key, name string) bool {
+	_, ok := QueriesMap[key][name]
+
+	return ok
+}
+
+var QueriesMap = map[string]map[string]struct{}{
+	"Exec": {
+		"Exec":     {},
+		"Query":    {},
+		"QueryRow": {},
+	},
+	"Get": {
+		"Get":    {},
+		"Select": {},
+	},
+	"Execx": {
+		"Execx":     {},
+		"Queryx":    {},
+		"QueryxRow": {},
+	},
+	"Getx": {
+		"Getx":    {},
+		"Selectx": {},
+	},
 }
 
 type CallData struct {
@@ -218,27 +250,27 @@ func GetCallData(
 					sqlVarName := ""
 					sqlArgsVarName := ""
 
-					switch fun.Sel.Name {
-					case "Exec", "Query", "QueryRow":
+					switch {
+					case caseFunc("Exec", fun.Sel.Name):
 						if name, ok := getArgumentName(expr, 1, fset); ok {
 							sqlVarName = name
 						}
 						if name, ok := getArgumentName(expr, 2, fset); ok {
 							sqlArgsVarName = strings.TrimRight(name, ".")
 						}
-					case "Get", "Select":
+					case caseFunc("Get", fun.Sel.Name):
 						if name, ok := getArgumentName(expr, 2, fset); ok {
 							sqlVarName = name
 						}
 						if name, ok := getArgumentName(expr, 3, fset); ok {
 							sqlArgsVarName = strings.TrimRight(name, ".")
 						}
-					case "Execx", "Queryx", "QueryxRow":
+					case caseFunc("Execx", fun.Sel.Name):
 						isSqlizer = true
 						if name, ok := getArgumentName(expr, 1, fset); ok {
 							sqlizerVarName = name
 						}
-					case "Getx", "Selectx":
+					case caseFunc("Getx", fun.Sel.Name):
 						isSqlizer = true
 						if name, ok := getArgumentName(expr, 2, fset); ok {
 							sqlizerVarName = name
@@ -292,4 +324,54 @@ func getBaseIdentifier(expr ast.Expr) string {
 	default:
 		return ""
 	}
+}
+
+type MutationQueries struct {
+	Exec  []string `yaml:"exec"`
+	Get   []string `yaml:"get"`
+	Execx []string `yaml:"execx"`
+	Getx  []string `yaml:"getx"`
+}
+
+func ParseMutationQueries(queriesFile string) {
+	path := "scripts/showq.yaml"
+	if queriesFile != "" {
+		path = queriesFile
+	}
+
+	f, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+
+	var q MutationQueries
+
+	if err := yaml.Unmarshal(f, &q); err != nil {
+		return
+	}
+
+	if len(q.Exec) != 0 {
+		QueriesMap["Exec"] = fillMap(q.Exec)
+	}
+
+	if len(q.Get) != 0 {
+		QueriesMap["Get"] = fillMap(q.Get)
+	}
+
+	if len(q.Execx) != 0 {
+		QueriesMap["Execx"] = fillMap(q.Execx)
+	}
+
+	if len(q.Getx) != 0 {
+		QueriesMap["Getx"] = fillMap(q.Getx)
+	}
+}
+
+func fillMap(names []string) map[string]struct{} {
+	execMap := make(map[string]struct{}, 3)
+	for _, v := range names {
+		execMap[v] = struct{}{}
+	}
+
+	return execMap
 }
