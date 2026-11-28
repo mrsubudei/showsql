@@ -67,6 +67,10 @@ func ExtractSignature(
 			}
 		}
 
+		if methodName == "" {
+			return true
+		}
+
 		data := SignatureData{}
 		data.MethodName = methodName
 		data.StructName = structName

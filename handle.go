@@ -135,8 +135,8 @@ func cutFileName(fileName string) string {
 }
 
 func getSignatureData(signatureDataMap map[string]SignatureData, callMethodName string) (SignatureData, bool) {
-	for _, data := range signatureDataMap {
-		if data.MethodName == callMethodName {
+	for k, data := range signatureDataMap {
+		if data.MethodName == callMethodName && strings.Contains(k, "1") {
 			return data, true
 		}
 	}
