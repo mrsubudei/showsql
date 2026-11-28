@@ -299,8 +299,7 @@ func GetCallData(
 						currFuncEndLine = funcEndLines.Get()
 					}
 
-					sl := strings.Split(currentFunc, "_")
-					currentFunc = strings.Join(sl[:len(sl)-1], "_") + "_" + strconv.Itoa(nestingLevel)
+					currentFunc = removeSuffixNumber(currentFunc) + "_" + strconv.Itoa(nestingLevel)
 
 					result[position.Line] = CallData{
 						ParentMethodName: currentFunc,
@@ -395,6 +394,12 @@ func fillMap(names []string) map[string]struct{} {
 	}
 
 	return execMap
+}
+
+func removeSuffixNumber(str string) string {
+	sl := strings.Split(str, "_")
+
+	return strings.Join(sl[:len(sl)-1], "_")
 }
 
 type Stack struct {

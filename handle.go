@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -46,13 +47,15 @@ func Handle(
 		return errors.New("there is no database calls in this file")
 	}
 
+	removedCallDataMap := removeExtraCalls(callDataMap)
+
 	signatureDataMap := ExtractSignature(file)
 
 	destDir := "cmd/showsql_tmp"
 	deleteTmpFolder(destDir)
 
 	srcDir := cutFileName(fileName)
-	if err := CopyAndModifyFiles(srcDir, destDir, fileName, callDataMap, signatureDataMap); err != nil {
+	if err := CopyAndModifyFiles(srcDir, destDir, fileName, removedCallDataMap, signatureDataMap); err != nil {
 		return errors.Wrap(err, "CopyAndModifyFiles")
 	}
 
@@ -145,4 +148,26 @@ func CheckGoModExists() bool {
 	_, err := os.Stat("go.mod")
 
 	return err == nil || !os.IsNotExist(err)
+}
+
+func removeExtraCalls(callDataMap map[int]CallData) map[int]CallData {
+	var result = make(map[int]CallData, len(callDataMap))
+
+	m := make(map[string][]CallData, len(callDataMap))
+
+	for _, val := range callDataMap {
+		key := removeSuffixNumber(val.ParentMethodName)
+		m[key] = append(m[key], val)
+	}
+
+	for _, val := range m {
+		sort.Slice(val, func(i, j int) bool {
+			return val[i].Pos < val[j].Pos
+		})
+
+		first := val[0]
+		result[first.Pos] = first
+	}
+
+	return result
 }
